@@ -1,0 +1,67 @@
+const VAPID_PUBLIC_KEY = 'BCCs2eonMI-6H2ctvFaWg-UYdDv387Vno_bzUzALpB442r2lCnsHmtrx8biyPi_E-1fSGABK_Qs_GlvPoJJqxbk';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+export async function subscribePush() {
+  const registration = await navigator.serviceWorker.ready;
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+  }
+  
+  const p256dhArray = new Uint8Array(subscription.getKey('p256dh'));
+  const authArray = new Uint8Array(subscription.getKey('auth'));
+  const p256dh = btoa(String.fromCharCode(...p256dhArray));
+  const auth = btoa(String.fromCharCode(...authArray));
+  const token = localStorage.getItem('storyapp_token');
+  if (!token) {
+    throw new Error('Silakan login dulu untuk notifikasi');
+  }
+  
+  await fetch('https://story-api.dicoding.dev/v1/notifications/subscribe', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      endpoint: subscription.endpoint,
+      keys: {
+        p256dh: p256dh,
+        auth: auth
+      }
+    })
+  });
+  return subscription;
+}
+
+export async function unsubscribePush() {
+  const registration = await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.getSubscription();
+  if (subscription) {
+    const token = localStorage.getItem('storyapp_token');
+    if (token) {
+      await fetch('https://story-api.dicoding.dev/v1/notifications/subscribe', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ endpoint: subscription.endpoint })
+      });
+    }
+    await subscription.unsubscribe();
+  }
+}
