@@ -1,2 +1,0 @@
-APP_URL=<https://kusnadi34.github.io/starter-project-webpack-story-1i/>
-MAP_SERVICE_API_KEY=<api_key>
